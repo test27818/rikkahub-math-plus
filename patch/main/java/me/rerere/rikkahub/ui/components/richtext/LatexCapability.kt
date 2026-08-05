@@ -17,6 +17,14 @@ object LatexCapability : KoinComponent {
     private const val PREFS_NAME = "latex_capability"
     private const val KEY_CHECKED = "checked"
     private const val KEY_AVAILABLE = "available"
+    private const val KEY_LAST_CHECK = "last_check"
+
+    /**
+     * false 结果的缓存有效期（毫秒）。超过后即使缓存了 false 也会重新检测——
+     * 修复"装包前检测失败被永久缓存，装完包后永远报 LaTeX 未安装"的问题。
+     * true 结果永久缓存（工具链不会无故消失）。
+     */
+    private const val FALSE_TTL_MS = 60_000L
 
     private val repo: WorkspaceRepository by inject()
 
@@ -32,15 +40,25 @@ object LatexCapability : KoinComponent {
         val prefs: SharedPreferences =
             context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
 
-        if (!prefs.getBoolean(KEY_CHECKED, false)) {
-            val available = checkWorkspace()
-            prefs.edit()
-                .putBoolean(KEY_CHECKED, true)
-                .putBoolean(KEY_AVAILABLE, available)
-                .apply()
-            return available
+        // 缓存命中判定：
+        //  - 缓存的 true：永久有效（工具链装好后不会消失）
+        //  - 缓存的 false：仅 FALSE_TTL_MS 内有效，过期后自动重检（用户装完包无需"关再开"开关）
+        val cachedAvailable = prefs.getBoolean(KEY_AVAILABLE, false)
+        if (prefs.getBoolean(KEY_CHECKED, false)) {
+            val lastCheck = prefs.getLong(KEY_LAST_CHECK, 0L)
+            val ttlOk = if (cachedAvailable) Long.MAX_VALUE else FALSE_TTL_MS
+            if (System.currentTimeMillis() - lastCheck < ttlOk) {
+                return cachedAvailable
+            }
         }
-        return prefs.getBoolean(KEY_AVAILABLE, false)
+
+        val available = checkWorkspace()
+        prefs.edit()
+            .putBoolean(KEY_CHECKED, true)
+            .putBoolean(KEY_AVAILABLE, available)
+            .putLong(KEY_LAST_CHECK, System.currentTimeMillis())
+            .apply()
+        return available
     }
 
     /** 强制重新检测（用户装完 LaTeX 后调用） */

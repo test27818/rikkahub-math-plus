@@ -15,9 +15,30 @@ description: 在 RikkaHub 的 proot 工作区中配置 Lean 证明助手环境�
 - 用户有一篇数学论文/LaTeX 内容，想翻译成 Lean 可编译的定理
 - 用户在讨论 AI 数学研究（搜索+验证闭环、反例搜索等）
 
-## 1. 配置 Lean 环境（proot 工作区，约 20-40 分钟）
+## 1. 配置 Lean 环境（proot 工作区，hosts 加速后约 20-30 分钟）
 
 > 手机端 RikkaHub 工作区是 proot 沙箱：有 600 秒单命令上限、git 对象读取可能 EPERM。下面配方已针对此优化。
+
+### 1.0 网络加速（★第一步，收益最大）
+
+proot 沙箱 DNS 解析实测 **~5 秒/次**，占下载耗时 90%——所有"连接慢"的根源其实是 DNS，不是带宽。解法：**解析一次 IP 固化到 /etc/hosts**，连接从 6s 降到 0.25s（实测 6-18 倍加速）。
+
+```bash
+# 一次性执行（setup_mathlib.sh 第 ⓪ 步已内置）：
+for d in lakecache.blob.core.windows.net github.com codeload.github.com raw.githubusercontent.com api.github.com objects.githubusercontent.com; do
+  ip=$(python3 -c "import socket;print(socket.getaddrinfo('$d',443,family=socket.AF_INET)[0][4][0])")
+  grep -q "$d" /etc/hosts || echo "$ip $d" >> /etc/hosts
+done
+```
+
+加速前后实测（2026-08-05 沙箱）：
+| 操作 | 加速前 | 加速后 |
+|---|---|---|
+| lakecache 单文件下载 | 6.1s（连接 5.3s） | 1.0s（连接 0.25s） |
+| codeload 源码 23MB | 9.3s（≈2.5MB/s） | 4.4s（≈5.2MB/s） |
+| GitHub 任意请求 | ~5.4s | ~0.3s |
+
+> 注意：IP 会变化（尤其 Azure），每 1-2 周或遇到连接失败时重跑刷新。
 
 ### 1.1 安装 elan（Lean 版本管理器）
 

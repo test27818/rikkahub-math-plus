@@ -7,6 +7,27 @@ set -euo pipefail
 export PATH="$HOME/.elan/bin:$PATH"
 PROJ="${1:-lean-project}"
 
+echo "═══ ⓪ 网络加速（★最大收益：绕过慢 DNS）═══"
+# proot 沙箱 DNS 解析常慢（实测 ~5s/次，占下载耗时 90%）。
+# 解析一次 IP 固化到 /etc/hosts：连接 6s→0.25s（6-18 倍加速，实测）。
+# 注意：IP 可能变化，长期环境建议每 1-2 周重跑本步骤刷新。
+setup_hosts() {
+  local added=0
+  for entry in lakecache.blob.core.windows.net github.com codeload.github.com \
+      raw.githubusercontent.com api.github.com objects.githubusercontent.com; do
+    if ! grep -q "$entry" /etc/hosts; then
+      local ip
+      ip=$(python3 -c "import socket;print(socket.getaddrinfo('$entry',443,family=socket.AF_INET)[0][4][0])" 2>/dev/null)
+      if [ -n "$ip" ]; then
+        cp /etc/hosts /etc/hosts.bak 2>/dev/null || true
+        echo "$ip $entry" >> /etc/hosts && added=1
+      fi
+    fi
+  done
+  [ "$added" = "1" ] && echo "→ 已固化 DNS 到 /etc/hosts（备份: /etc/hosts.bak）"
+}
+setup_hosts
+
 echo "═══ ① elan（Lean 版本管理器）═══"
 if ! command -v elan >/dev/null 2>&1; then
   curl -fsSL https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh | sh -s -- -y
@@ -39,6 +60,7 @@ if ! lake update mathlib; then
   mv /tmp/mathlib4-src .lake/packages/mathlib
   cd .lake/packages/mathlib && git init -q && git add -A && git commit -qm "mathlib @ $SHA"
   cd ../..
+  # 更新 manifest rev 为本地 HEAD
   python3 - "$SHA" <<'PY'
 import json,sys,subprocess
 sha = subprocess.check_output(["git","rev-parse","HEAD"],cwd=".lake/packages/mathlib").decode().strip()

@@ -1,6 +1,5 @@
 package me.rerere.rikkahub.ui.components.richtext
 
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -33,6 +32,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import me.rerere.rikkahub.data.repository.WorkspaceRepository
 import me.rerere.rikkahub.ui.context.LocalSettings
+import me.rerere.rikkahub.ui.theme.LocalDarkMode
 import org.koin.compose.koinInject
 import java.io.File
 import java.security.MessageDigest
@@ -94,7 +94,10 @@ fun MathBlock(
     val settings = LocalSettings.current.displaySetting
     val context = LocalContext.current
     val repo: WorkspaceRepository = koinInject()
-    val isDark = isSystemInDarkTheme()
+    // 跟随应用内"通用设置-颜色模式"（LocalDarkMode 由 RouteActivity 按 colorMode 计算），
+    // 与 HighlightCodeBlock/Mermaid 等组件一致；不能用 isSystemInDarkTheme()（只反映系统主题，
+    // 应用内设浅色+系统深色时会错误地按深色渲染出白图）
+    val isDark = LocalDarkMode.current
 
     val enableRendering = settings.enableDiagramRendering
     val isDiagram = remember(latex) { isDiagramLatex(latex) }
@@ -140,7 +143,7 @@ fun MathBlock(
                 DiagramRenderer.render(repo, stripDollarWrappers(current), isDark)
             }
 
-            // 存磁盘
+            // 存磁盘（原始 SVG，黑色）
             withContext(Dispatchers.IO) {
                 diskFile.parentFile?.mkdirs()
                 diskFile.writeText(svg)

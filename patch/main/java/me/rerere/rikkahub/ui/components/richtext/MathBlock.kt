@@ -3,10 +3,12 @@ package me.rerere.rikkahub.ui.components.richtext
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.layout.wrapContentWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.wrapContentHeight
+import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.LocalTextStyle
@@ -36,6 +38,7 @@ import me.rerere.rikkahub.ui.theme.LocalDarkMode
 import org.koin.compose.koinInject
 import java.io.File
 import java.security.MessageDigest
+import kotlin.math.min
 
 private val DIAGRAM_PATTERNS = listOf(
     Regex("""\\begin\{tikz\w*\}"""),   // 前缀通配：tikzpicture/tikzcd/tikztiming...
@@ -228,17 +231,39 @@ private fun DiagramImage(svg: String, key: String, modifier: Modifier) {
         }
     }
 
+    // SVG 逻辑尺寸（1px→1dp），与 Bitmap 渲染密度解耦，避免高 dpi 下图过大
+    val size = remember(svg) { parseSvgSize(svg) }
+
     val file = svgFile
-    if (file != null) {
+    if (file != null && size != null) {
+        val (w, h) = size
+        val scale = min(1f, 320f / w)  // 大图限宽 320dp，小图按 1px→1dp 原尺寸
         AsyncImage(
             model = file,
             contentDescription = "交换图",
             modifier = modifier
-                .widthIn(max = 320.dp)
-                .wrapContentWidth()
-                .wrapContentHeight()
+                .size(width = (w * scale).dp, height = (h * scale).dp)
                 .padding(vertical = 4.dp),
             contentScale = ContentScale.Fit,
         )
+    }
+}
+
+/**
+ * 从 pdftocairo 生成的 SVG 提取逻辑尺寸。
+ *
+ * pdftocairo 输出的 width/height 无单位（CSS 默认 px），TeX 默认 10pt 字 ≈ 13.3px。
+ * 显示时按 1px→1dp 映射，与 Bitmap（scaleToDensity=true 按设备 density 渲染）解耦——
+ * 修复 Coil SvgDecoder 的 Bitmap px 被 Compose 直接当 dp 布局导致的高 dpi 下
+ * "小图显示 200dp+、字号 36dp+" 的图过大问题。修复后字号统一 ≈13dp，
+ * 图大小与内容量成正比（小图 75dp、大图 157dp）。
+ */
+private fun parseSvgSize(svg: String): Pair<Float, Float>? {
+    val m = Regex("""<svg[^>]*\bwidth="([\d.]+)"[^>]*\bheight="([\d.]+)"""").find(svg)
+        ?: Regex("""<svg[^>]*\bheight="([\d.]+)"[^>]*\bwidth="([\d.]+)"""").find(svg)
+    return m?.let {
+        val w = it.groupValues[1].toFloatOrNull()
+        val h = it.groupValues[2].toFloatOrNull()
+        if (w != null && h != null && w > 0f && h > 0f) w to h else null
     }
 }

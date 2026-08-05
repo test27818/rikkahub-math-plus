@@ -34,11 +34,14 @@ object DiagramRenderer {
                 command = "pdflatex -interaction=nonstopmode $base.tex",
                 cwd = "", timeoutMillis = TIMEOUT_COMPILE
             )
-            if (repo.fileSize(id, WorkspaceStorageArea.FILES, "$base.pdf") <= 0L) {
+            // fileSize 对不存在的文件抛 IllegalArgumentException（"File does not exist: ..."），
+            // 用 runCatching 容错为 0，从而走下面读 .log 提取真实错误原因，而不是把底层异常透传给用户
+            val pdfSize = runCatching { repo.fileSize(id, WorkspaceStorageArea.FILES, "$base.pdf") }.getOrDefault(0L)
+            if (pdfSize <= 0L) {
                 // 读 .log 提取缺失宏包名，给用户可操作的错误信息
                 val reason = runCatching {
                     val log = repo.readText(id, "$base.log")
-                    val m = Regex("""! LaTeX Error: File '([^']+\\.sty)' not found""").find(log)
+                    val m = Regex("""! LaTeX Error: File '([^']+\.sty)' not found""").find(log)
                         ?: Regex("""! Package ([a-zA-Z0-9]+) Error""").find(log)
                     m?.groupValues?.get(1)?.let { "缺少宏包: $it（可用 apt install texlive-* 安装）" }
                         ?: log.lineSequence().firstOrNull { it.trimStart().startsWith("!") }
@@ -65,14 +68,14 @@ object DiagramRenderer {
         }
     }
 
-    /** 动态 preamble：基础包 + 从用户代码提取的额外 \\usepackage / \\usetikzlibrary。
+    /** 动态 preamble：基础包 + 从用户代码提取的额外 \usepackage / \usetikzlibrary。
      *  这样新增 tikz 宏包（pgfplots/chemfig 等）无需改代码——用户代码声明即加载。 */
     private fun buildPreamble(latex: String, isDark: Boolean): String {
         // 提取用户代码里的额外宏包（排除已在基础 preamble 的）
         val basePackages = setOf(
             "fontenc", "lmodern", "tikz", "xcolor", "amsmath", "amssymb", "xy", "amscd",
         )
-        val extraPackages = Regex("""\\usepackage(?:\\[[^]]*\\])?\\{([^}]+)\\""")
+        val extraPackages = Regex("""\\usepackage(?:\[[^]]*\])?\{([^}]+)\}""")
             .findAll(latex)
             .flatMap { it.groupValues[1].split(",").map(String::trim) }
             .filter { it.isNotBlank() && it !in basePackages }
@@ -81,7 +84,7 @@ object DiagramRenderer {
 
         // 提取用户代码里的 tikz library（基础已有 cd/arrows.meta）
         val baseLibs = setOf("cd", "arrows.meta")
-        val extraLibs = Regex("""\\usetikzlibrary\\{([^}]+)\\""")
+        val extraLibs = Regex("""\\usetikzlibrary\{([^}]+)\}""")
             .findAll(latex)
             .flatMap { it.groupValues[1].split(",").map(String::trim) }
             .filter { it.isNotBlank() && it !in baseLibs }
@@ -102,9 +105,9 @@ object DiagramRenderer {
             appendLine("\\usepackage[all]{xy}")
             appendLine("\\usepackage{amscd}")
             extraPackages.forEach { appendLine("\\usepackage{$it}") }
-            appendLine("""\\tikzcdset{
+            appendLine("""\tikzcdset{
   every arrow/.append style={/tikz/line width=0.35pt},
-  every label/.append style={font=\\footnotesize}
+  every label/.append style={font=\footnotesize}
 }""")
             appendLine("\\begin{document}")
             appendLine(latex)

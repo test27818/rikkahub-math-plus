@@ -85,7 +85,9 @@ cd .. && ./gradlew assembleRelease -PtargetAbis=arm64-v8a
 ## ⚠️ 说明
 
 - **完整源码**：`src-pdflatex/`（上游 2.4.3 + 全部二改，可直接构建；已排除 build/node_modules/.git）
-- **补丁集**：`src/`（9 个二改文件，clone 上游后按 `docs/ROUTE_A.md` 应用可复现全部改动）
+- **补丁集**：`patch/`（9 个二改文件，clone 上游后按 `docs/ROUTE_A.md` 应用可复现全部改动）
+  > 与 `src-pdflatex/` 的区别：`src-pdflatex/` 是**完整工程**（开箱即构建），`patch/` 是**最小改动清单**
+  > （`patch/main/...` 对应上游工程的 `app/src/main/...`，去掉 `app/` 前缀，方便对号入座）
 - **APK**：`RikkaHub-2.4.3-arm64-v8a-debug.apk`（路线 A 测试包，包名 `me.rerere.rikkahub.debug`）
 - **ai4math-lean 技能**自包含可直接使用（`.agents/skills/ai4math-lean/`）
 - 不含任何密钥/私钥（`google-services.json`、签名 keystore 均已 gitignore）

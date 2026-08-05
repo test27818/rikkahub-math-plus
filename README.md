@@ -74,6 +74,7 @@ cd .. && ./gradlew assembleRelease -PtargetAbis=arm64-v8a
 | 文档 | 内容 |
 |------|------|
 | `docs/ROUTE_A.md` | 路线 A（pdflatex）实现指南（可无上下文复现） |
+| `docs/BUG_REGEX_PREAMBLE.md` | 动态 preamble 正则 v3 修复交接文档 |
 | `docs/ROUTE_B.md` | 路线 B（TikZJax WASM）架构与踩坑记录 |
 | `docs/STRATEGY.md` | 双路线战略思考 |
 | `docs/REVIEW.md` | 代码审查与全部 bug 记录 |
@@ -83,6 +84,9 @@ cd .. && ./gradlew assembleRelease -PtargetAbis=arm64-v8a
 
 ## ⚠️ 说明
 
-- 本仓库为**二改补丁集 + 技能包**：TikZ 部分不包含完整源码，请 clone 上游 `rikkahub/rikkahub` 后按 `docs/ROUTE_A.md` 应用；`ai4math-lean` 技能自包含可直接使用
+- **完整源码**：`src-pdflatex/`（上游 2.4.3 + 全部二改，可直接构建；已排除 build/node_modules/.git）
+- **补丁集**：`src/`（9 个二改文件，clone 上游后按 `docs/ROUTE_A.md` 应用可复现全部改动）
+- **APK**：`RikkaHub-2.4.3-arm64-v8a-debug.apk`（路线 A 测试包，包名 `me.rerere.rikkahub.debug`）
+- **ai4math-lean 技能**自包含可直接使用（`.agents/skills/ai4math-lean/`）
 - 不含任何密钥/私钥（`google-services.json`、签名 keystore 均已 gitignore）
 - 仅用于学习与展示，遵循上游 AGPL-3.0

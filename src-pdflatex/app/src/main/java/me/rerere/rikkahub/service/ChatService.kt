@@ -278,10 +278,19 @@ class ChatService(
     // ---- 初始化对话 ----
 
     suspend fun initializeConversation(conversationId: Uuid) {
-        getOrCreateSession(conversationId) // 确保 session 存在
+        val session = getOrCreateSession(conversationId) // 确保 session 存在
         val conversation = conversationRepo.getConversationById(conversationId)
         if (conversation != null) {
-            updateConversation(conversationId, conversation)
+            // 修复: 流式生成期间消息只更新内存(session.state)，DB 仍是旧数据；
+            // 若切走再切回时无条件用 DB 覆盖内存，会把已生成的半截内容从 UI 顶掉
+            // （表现为"未连接"，工具执行期间尤其明显；窗口期中断则彻底丢失）。
+            // 仅当会话未在生成、且内存态不比 DB 新时才用 DB 覆盖。
+            val sessionGenerating = session.isGenerating
+            val memoryNewer =
+                session.state.value.messageNodes.size > conversation.messageNodes.size
+            if (!sessionGenerating && !memoryNewer) {
+                updateConversation(conversationId, conversation)
+            }
             settingsStore.updateAssistant(conversation.assistantId)
         } else {
             // 新建对话, 并添加预设消息

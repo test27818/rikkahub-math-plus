@@ -41,18 +41,10 @@ data class UIMessage(
                         if (deltaPart.text.isEmpty()) {
                             acc
                         } else {
-                            // 合并到最后一个 Text part（而非仅限末尾最后一个 part）。
-                            // 部分供应商会交错返回 thinking/content（例如同一 chunk 同时携带
-                            // reasoning_content 与 content，或 Gemini/Claude 的思考-正文交错），
-                            // 若只检查 acc.lastOrNull()，中间的 Reasoning/Tool part 会把正文拆成
-                            // 多个 Text part，渲染时"思考-正文-思考-正文"结构错乱。
-                            val lastTextIndex = acc.indexOfLast { it is UIMessagePart.Text }
-                            if (lastTextIndex >= 0) {
-                                val lastText = acc[lastTextIndex] as UIMessagePart.Text
-                                acc.toMutableList().apply {
-                                    this[lastTextIndex] =
-                                        lastText.copy(text = lastText.text + deltaPart.text)
-                                }
+                            val lastPart = acc.lastOrNull()
+                            if (lastPart is UIMessagePart.Text) {
+                                // Append to the last Text part
+                                acc.dropLast(1) + lastPart.copy(text = lastPart.text + deltaPart.text)
                             } else {
                                 // Create new Text part
                                 acc + deltaPart
@@ -82,22 +74,15 @@ data class UIMessage(
                         if (deltaPart.reasoning.isEmpty() && deltaPart.metadata == null) {
                             acc
                         } else {
-                            // 合并到最后一个 Reasoning part（而非仅限末尾最后一个 part）。
-                            // 与 Text 分支同理：thinking/content 交错时若只检查 acc.lastOrNull()，
-                            // 思维链会被拆成多个 Reasoning part，渲染成多张思考卡片并夹在正文中间，
-                            // 表现为"思维链写到一半从上面/中间继续写"。统一合并到最后一个
-                            // Reasoning part 可保持单条连续的思维链。
-                            val lastReasoningIndex = acc.indexOfLast { it is UIMessagePart.Reasoning }
-                            if (lastReasoningIndex >= 0) {
-                                val lastReasoning = acc[lastReasoningIndex] as UIMessagePart.Reasoning
-                                val merged = UIMessagePart.Reasoning(
-                                    reasoning = lastReasoning.reasoning + deltaPart.reasoning,
-                                    createdAt = lastReasoning.createdAt,
+                            val lastPart = acc.lastOrNull()
+                            if (lastPart is UIMessagePart.Reasoning) {
+                                // Append to the last Reasoning part
+                                acc.dropLast(1) + UIMessagePart.Reasoning(
+                                    reasoning = lastPart.reasoning + deltaPart.reasoning,
+                                    createdAt = lastPart.createdAt,
                                     finishedAt = null,
-                                )
-                                merged.metadata = deltaPart.metadata ?: lastReasoning.metadata
-                                acc.toMutableList().apply {
-                                    this[lastReasoningIndex] = merged
+                                ).also {
+                                    it.metadata = deltaPart.metadata ?: lastPart.metadata
                                 }
                             } else {
                                 // Create new Reasoning part

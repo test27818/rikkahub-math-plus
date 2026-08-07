@@ -26,7 +26,9 @@ import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.geometry.Size
@@ -37,6 +39,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.isActive
 import me.rerere.ai.provider.Model
 import me.rerere.ai.ui.UIMessagePart
@@ -97,7 +100,6 @@ private fun rememberReasoningState(reasoning: UIMessagePart.Reasoning): Pair<Rea
         if (loading) {
             if (!state.expandState.expanded && settings.displaySetting.showThinkingContent)
                 state.expandState = ReasoningCardState.Preview
-            scrollState.animateScrollTo(scrollState.maxValue)
         } else {
             if (state.expandState.expanded) {
                 state.expandState = if (settings.displaySetting.autoCloseThinking)
@@ -106,6 +108,23 @@ private fun rememberReasoningState(reasoning: UIMessagePart.Reasoning): Pair<Rea
                     ReasoningCardState.Expanded
             }
         }
+    }
+
+    // 流式生成时保持贴底显示。
+    // 注意：不能在 LaunchedEffect(reasoning.reasoning) 里直接读 scrollState.maxValue——
+    // maxValue 是布局期才更新的值，而该 Effect 在重组合后、新文本布局完成前就已执行，
+    // 读到的永远是上一帧的旧值，导致滚动位置跳到旧底部（即新文本的顶部/中间），
+    // 直到下一个 chunk 到达才被修正回底部——表现为"思维链写到一半从上面/中间继续写"。
+    // 正确做法：用 snapshotFlow 监听 maxValue（布局完成后才更新）再滚动。
+    val currentLoading by rememberUpdatedState(loading)
+    LaunchedEffect(Unit) {
+        snapshotFlow { scrollState.maxValue }
+            .distinctUntilChanged()
+            .collect { max ->
+                if (currentLoading && max > 0) {
+                    scrollState.animateScrollTo(max)
+                }
+            }
     }
 
     LaunchedEffect(loading) {
